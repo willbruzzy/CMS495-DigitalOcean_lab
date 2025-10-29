@@ -1,92 +1,95 @@
 // app.js
 const http = require('http');
-const https = require('https');
+const os = require('os');
 
 const PORT = process.env.PORT || 3000;
 
-// Utility to fetch weather from wttr.in
-function fetchWeather(callback) {
-  https.get('https://wttr.in/?format=j1', (res) => {
-    let data = '';
-    res.on('data', chunk => data += chunk);
-    res.on('end', () => {
-      try {
-        const json = JSON.parse(data);
-        const area = json.nearest_area?.[0]?.areaName?.[0]?.value || 'Unknown';
-        const region = json.nearest_area?.[0]?.region?.[0]?.value || '';
-        const country = json.nearest_area?.[0]?.country?.[0]?.value || '';
-        const tempC = json.current_condition?.[0]?.temp_C;
-        const feelsLike = json.current_condition?.[0]?.FeelsLikeC;
-        const desc = json.current_condition?.[0]?.weatherDesc?.[0]?.value;
-        const iconUrl = json.current_condition?.[0]?.weatherIconUrl?.[0]?.value;
+let requestCount = 0;
 
-        callback({
-          area, region, country,
-          tempC, feelsLike, desc, iconUrl
-        });
-      } catch (err) {
-        callback({ error: 'Error parsing weather data' });
-      }
-    });
-  }).on('error', () => callback({ error: 'Failed to fetch weather data' }));
+// Helper to format uptime
+function formatTime(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  return `${h}h ${m}m ${s}s`;
 }
 
-// Generates HTML page dynamically
-function generatePage(weather) {
-  if (weather.error) {
-    return `<html><body style="font-family:sans-serif;text-align:center;padding-top:3rem;color:red;">
-              <h2>⚠️ ${weather.error}</h2>
-            </body></html>`;
-  }
+// Helper to create system dashboard HTML
+function generatePage() {
+  requestCount++;
+  const uptime = formatTime(os.uptime());
+  const load = os.loadavg().map(n => n.toFixed(2)).join(' | ');
+  const mem = ((os.totalmem() - os.freemem()) / os.totalmem() * 100).toFixed(1);
+  const platform = os.platform();
+  const nodeVersion = process.version;
 
+  const lines = [
+    '🖥️  DIGITALOCEAN RETRO TERMINAL DASHBOARD',
+    '------------------------------------------',
+    `Requests handled: ${requestCount}`,
+    `System uptime: ${uptime}`,
+    `CPU load (1m | 5m | 15m): ${load}`,
+    `Memory usage: ${mem}%`,
+    `Platform: ${platform}`,
+    `Node version: ${nodeVersion}`,
+    '',
+    'Tip: Refresh to see live stats 🔁'
+  ];
+
+  // build HTML with retro aesthetic
   return `
   <html>
   <head>
-    <title>🌤️ Live Weather Server</title>
+    <title>💾 Retro Terminal</title>
     <style>
       body {
-        background: linear-gradient(120deg, #89f7fe, #66a6ff);
+        background-color: #000;
+        color: #00FF41;
         font-family: 'Courier New', monospace;
-        text-align: center;
-        color: #fff;
-        padding-top: 4rem;
+        padding: 30px;
+        white-space: pre;
+        font-size: 1.2rem;
       }
-      img {
-        width: 80px;
-        margin: 10px;
-      }
-      .card {
-        background: rgba(255,255,255,0.1);
-        border-radius: 12px;
+      .cursor {
         display: inline-block;
-        padding: 2rem 3rem;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        width: 10px;
+        height: 1em;
+        background: #00FF41;
+        animation: blink 1s step-end infinite;
+        vertical-align: bottom;
       }
-      h1 { margin-bottom: 0; }
-      p { margin: 0.3rem 0; font-size: 1.2rem; }
-      footer { margin-top: 2rem; font-size: 0.9rem; color: #eee; }
+      @keyframes blink { 50% { opacity: 0; } }
+      #terminal { opacity: 0; animation: fadein 0.5s forwards; }
+      @keyframes fadein { to { opacity: 1; } }
     </style>
   </head>
   <body>
-    <div class="card">
-      <h1>${weather.area}, ${weather.region}</h1>
-      <h2>${weather.country}</h2>
-      <img src="${weather.iconUrl}" alt="weather icon">
-      <p>${weather.desc}</p>
-      <p>🌡️ ${weather.tempC}°C (feels like ${weather.feelsLike}°C)</p>
-    </div>
-    <footer>Powered by <a href="https://wttr.in" style="color:white;">wttr.in</a> & DigitalOcean</footer>
+    <div id="terminal"></div>
+    <div class="cursor"></div>
+
+    <script>
+      const lines = ${JSON.stringify(lines)};
+      let i = 0;
+      const term = document.getElementById('terminal');
+
+      function typeLine() {
+        if (i < lines.length) {
+          term.innerHTML += lines[i] + '\\n';
+          i++;
+          setTimeout(typeLine, 120);
+        }
+      }
+      typeLine();
+    </script>
   </body>
   </html>`;
 }
 
 const server = http.createServer((req, res) => {
-  fetchWeather((weather) => {
-    res.writeHead(200, { 'Content-Type': 'text/html' });
-    res.end(generatePage(weather));
-  });
+  res.writeHead(200, { 'Content-Type': 'text/html' });
+  res.end(generatePage());
 });
 
 server.listen(PORT, () => {
-  console.log(`🌦️  Live Weather Server running at http://localhost:${PORT}/`);
+  console.log(`💾 Retro Terminal Server running at http://localhost:${PORT}/`);
 });
